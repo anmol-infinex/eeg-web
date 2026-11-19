@@ -1,0 +1,35 @@
+# Environment & Secrets
+.env*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+
+# Node & Frontend
+node_modules/
+dist/
+.vite/
+.next/
+*.log
+
+# Sensitive EEG Data & Recordings (license protection)
+data/
+*.edf
+backend/samples/
+recordings/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
