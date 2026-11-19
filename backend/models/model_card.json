@@ -1,0 +1,54 @@
+{
+  "model_name": "TUSZ_EEG_DEEP_CNN",
+  "model_version": "1.0.0",
+  "architecture": "Sequential 1D CNN",
+  "framework": "keras-3.15.1-torch-cpu",
+  "input_shape": [null, 1280, 22],
+  "output_shape": [null, 3],
+  "sample_rate_hz": 256,
+  "window_sec": 5.0,
+  "stride_sec": 1.0,
+  "num_channels": 22,
+  "channels": [
+    "FP1", "FP2", "F3", "F4", "C3", "C4", "P3", "P4",
+    "O1", "O2", "F7", "F8", "T7", "T8", "P7", "P8",
+    "FZ", "CZ", "PZ", "A1", "A2", "EKG"
+  ],
+  "classes": ["normal", "pre_seizure", "seizure"],
+  "class_mapping": {
+    "0": "normal",
+    "1": "pre_seizure",
+    "2": "seizure"
+  },
+  "parameters": {
+    "total": 2811779,
+    "trainable": 2805891,
+    "non_trainable": 5888,
+    "layers_count": 47
+  },
+  "preprocess": {
+    "bandpass_hz": [0.5, 50.0],
+    "notch_hz": 50.0,
+    "normalize": "z_score",
+    "target_dtype": "float32"
+  },
+  "adapter_mapping": {
+    "source_hardware": "openbci-cyton-daisy",
+    "source_fs": 125,
+    "source_channels": 16,
+    "target_channels": 22,
+    "interpolation_rules": {
+      "FZ": ["F3", "F4"],
+      "CZ": ["C3", "C4"],
+      "PZ": ["P3", "P4"],
+      "A1": ["T7"],
+      "A2": ["T8"],
+      "EKG": []
+    }
+  },
+  "inference_performance": {
+    "mean_latency_ms": 17.0,
+    "max_latency_ms": 28.0,
+    "ram_footprint_mb": 180.0
+  }
+}

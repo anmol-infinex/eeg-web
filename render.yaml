@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: seizure-sentry-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ACCESS_KEY
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: ALLOWED_ORIGIN
+        value: https://seizure-sentry.vercel.app,http://localhost:5173,http://localhost:3000
+      - key: MODEL_PATH
+        value: /app/models/tusz_3class_eeg_model.h5
+      - key: DATA_DIR
+        value: /data

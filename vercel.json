@@ -1,0 +1,15 @@
+{
+  "framework": "vite",
+  "rootDirectory": "frontend",
+  "cleanUrls": true,
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Permissions-Policy", "value": "serial=(self), microphone=(), camera=(), geolocation=()" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
+      ]
+    }
+  ]
+}
