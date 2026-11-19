@@ -1,3 +1,14 @@
+# Secrets and environment files
+.env*
+*.env
+*.pem
+*.key
+*.cert
+*.crt
+id_rsa*
+secrets.*
+
+# Python caches and virtual environments
 __pycache__
 *.pyc
 *.pyo
@@ -6,14 +17,20 @@ __pycache__
 .venv
 venv
 env
+
+# Dependencies and artifacts
 node_modules
-.git
-.gitignore
-.agents
 dist
 build
 tests
 .coverage
 htmlcov
+
+# Version control and agents
+.git
+.gitignore
+.agents
+
+# Markdown documentation
 *.md
 !README.md
