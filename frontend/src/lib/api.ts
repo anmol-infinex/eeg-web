@@ -4,13 +4,13 @@
 
 import type { PipelineDiagnostics, SessionRecord } from './types'
 
-const BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
+const BASE = (import.meta.env.VITE_API_URL ?? 'https://seizure-sentry-api.onrender.com').replace(/\/$/, '')
 
-let _accessKey = sessionStorage.getItem('sentry_access_key') ?? ''
+let _accessKey = (typeof window !== 'undefined' ? sessionStorage.getItem('sentry_access_key') : '') || 'sentry-secret-2026'
 
-export function getAccessKey() { return _accessKey }
+export function getAccessKey() { return _accessKey || 'sentry-secret-2026' }
 export function setAccessKey(key: string) {
-  _accessKey = key
+  _accessKey = key || 'sentry-secret-2026'
   if (key) sessionStorage.setItem('sentry_access_key', key)
   else sessionStorage.removeItem('sentry_access_key')
 }

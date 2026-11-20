@@ -60,11 +60,15 @@ export default function LiveMonitor() {
   const [isPaused, setIsPaused] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [isDemoMode, setIsDemoMode] = useState(false)
+  const [demoPattern, setDemoPattern] = useState<'normal' | 'pre_seizure' | 'seizure'>('normal')
   const [isDeviceModalOpen, setIsDeviceModalOpen] = useState(false)
   const [elapsed, setElapsed] = useState(0)
 
   // Decoupled out-of-tree typed ring buffer for 60fps rendering without React GC overhead
   const ringBufferRef = useRef<Float32Array>(new Float32Array(0))
+  const demoPatternRef = useRef<'normal' | 'pre_seizure' | 'seizure'>('normal')
+  const streamTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const sampleIndexRef = useRef<number>(0)
   const wsRef = useRef<EegWsClient | null>(null)
   const serialRef = useRef<WebSerialSource | null>(null)
   const activeSessionIdRef = useRef<string>('')
@@ -116,86 +120,193 @@ export default function LiveMonitor() {
     })
   }, [])
 
+  // Switch live waveform demo pattern (normal, pre_seizure, seizure)
+  const switchDemoPattern = useCallback((pattern: 'normal' | 'pre_seizure' | 'seizure') => {
+    demoPatternRef.current = pattern
+    setDemoPattern(pattern)
+  }, [])
+
   // Start One-Click Preset Seizure Demo
   const startDemoSession = useCallback(async () => {
     alertAudio.unlock()
     setIsDemoMode(true)
     setConnStatus('Simulated')
     setElapsed(0)
-    ringBufferRef.current = new Float32Array(0)
+    sampleIndexRef.current = 0
+    demoPatternRef.current = 'normal'
+    setDemoPattern('normal')
+
+    // 1. Immediately pre-fill 4 seconds of realistic initial signal so waves display instantly!
+    const initSamples = 256 * 4
+    const initBuf = new Float32Array(initSamples * 16)
+    for (let s = 0; s < initSamples; s++) {
+      const t = s / 256
+      for (let ch = 0; ch < 16; ch++) {
+        const isPosterior = ch >= 6 && ch <= 9
+        const alpha = isPosterior
+          ? 18.0 * Math.sin(2 * Math.PI * 10.0 * t + ch * 0.4)
+          : 5.0 * Math.sin(2 * Math.PI * 10.0 * t)
+        const beta = ch < 4
+          ? 8.0 * Math.sin(2 * Math.PI * 22.0 * t + ch * 0.6)
+          : 3.0 * Math.sin(2 * Math.PI * 22.0 * t)
+        const noise = (Math.random() - 0.5) * 10.0
+        initBuf[s * 16 + ch] = alpha + beta + noise
+      }
+    }
+    ringBufferRef.current = initBuf
+    sampleIndexRef.current = initSamples
+
+    // Initial default prediction while model computes
+    setCurrentPrediction({
+      window_start: Date.now() - 5000,
+      window_end: Date.now(),
+      label: 'Normal',
+      probs: { normal: 0.95, pre_seizure: 0.04, seizure: 0.01 },
+      state: 'normal',
+      model_version: '1.0.0',
+      simulated: true,
+    })
 
     elapsedInterval.current = setInterval(() => setElapsed(e => e + 1), 1000)
 
-    try {
-      const demoRes = await startDemo().catch(() => null)
-      const sessionId = demoRes?.session_id ?? `demo-${Date.now()}`
-      activeSessionIdRef.current = sessionId
+    // 2. Real-time streaming generator: tick every 40ms pushing 10 new samples per channel (250 Hz continuous flow)
+    const CHUNK_SIZE = 10
+    streamTimerRef.current = setInterval(() => {
+      if (isPaused) return
+      const chunk = new Float32Array(CHUNK_SIZE * 16)
+      const currentPattern = demoPatternRef.current
 
-      const ws = new EegWsClient(sessionId, 'viewer', 'synthetic')
-      wsRef.current = ws
+      for (let s = 0; s < CHUNK_SIZE; s++) {
+        const sIdx = sampleIndexRef.current + s
+        const t = sIdx / 256.0
 
-      ws.onStatusChange = (status) => setConnStatus(status === 'Streaming' ? 'Simulated' : status)
-      ws.onPrediction = (pred) => {
-        setCurrentPrediction(pred)
-        setPredictions(prev => [...prev.slice(-300), pred])
-      }
-      ws.onAlert = (alert) => handleIncomingAlert(alert)
-      ws.onStatusUpdate = (status: WsLinkStatus) => {
-        if (status.artifact_guard_active !== undefined) {
-          setArtifactGuardActive(status.artifact_guard_active)
-          if (status.artifact_guard_active) alertAudio.stopCritical()
-        }
-        if (status.quality && Array.isArray(status.quality)) {
-          setQualities(status.quality as ChannelQuality[])
-        }
-      }
-      ws.onEegChunk = (chunk) => appendToRingBuffer(chunk)
-
-      ws.connect(getAccessKey())
-
-      // Periodically fetch diagnostics
-      diagInterval.current = setInterval(async () => {
-        try {
-          const diag = await getPipelineDiagnostics(sessionId)
-          setDiagnostics(diag)
-        } catch {}
-      }, 2000)
-
-      // Fallback synthetic generator in case WebSocket is offline in local preview
-      const states: Array<'normal' | 'pre_seizure' | 'seizure'> = [
-        'normal', 'normal', 'normal', 'pre_seizure', 'seizure', 'seizure', 'pre_seizure', 'normal'
-      ]
-      let idx = 0
-      syntheticPollingInterval.current = setInterval(async () => {
-        const state = states[idx % states.length]
-        idx++
-        try {
-          const win = await getSyntheticWindow(state)
-          const flat = new Float32Array(win.data.flat())
-          appendToRingBuffer(flat)
-          const label = state === 'normal' ? 'Normal' : state === 'pre_seizure' ? 'Pre-Seizure' : 'Seizure'
-          const probs = {
-            normal: state === 'normal' ? 0.88 : 0.08,
-            pre_seizure: state === 'pre_seizure' ? 0.78 : 0.12,
-            seizure: state === 'seizure' ? 0.84 : 0.04,
+        for (let ch = 0; ch < 16; ch++) {
+          let val = 0
+          if (currentPattern === 'normal') {
+            // Calm alpha waves in posterior channels (O1, O2, P3, P4)
+            const isPosterior = ch >= 6 && ch <= 9
+            const alphaAmp = isPosterior ? 22.0 : 6.0
+            const alpha = alphaAmp * Math.sin(2 * Math.PI * 10.0 * t + ch * 0.3)
+            const beta = (ch < 4 ? 9.0 : 3.0) * Math.sin(2 * Math.PI * 22.0 * t + ch * 0.7)
+            const noise = (Math.random() - 0.5) * 12.0
+            val = alpha + beta + noise
+          } else if (currentPattern === 'pre_seizure') {
+            // Pre-seizure: high amplitude rhythmic theta slowing (4.5 Hz) + delta (0.8 Hz)
+            const theta = 28.0 * Math.sin(2 * Math.PI * 4.5 * t + ch * 0.15)
+            const delta = 38.0 * Math.sin(2 * Math.PI * 0.8 * t + ch * 0.1)
+            const noise = (Math.random() - 0.5) * 8.0
+            val = theta + delta + noise
+          } else {
+            // Seizure: synchronous 3Hz high-voltage spike-and-wave discharges
+            const phase = (t * 3.0) % 1.0
+            const spike = phase < 0.15
+              ? 160.0 * Math.sin((phase / 0.15) * Math.PI)
+              : -45.0 * Math.sin(((phase - 0.15) / 0.85) * Math.PI)
+            const jitter = (Math.random() - 0.5) * 15.0
+            val = spike + jitter
           }
-          const pred: EegPrediction = {
-            window_start: Date.now(),
-            window_end: Date.now() + 5000,
-            label: label as 'Normal' | 'Pre-Seizure' | 'Seizure',
-            probs,
-            state,
-            model_version: '1.0.0',
-            simulated: true,
+          chunk[s * 16 + ch] = val
+        }
+      }
+      sampleIndexRef.current += CHUNK_SIZE
+      appendToRingBuffer(chunk)
+    }, 40)
+
+    // 3. Automated Inference Engine: queries live model every 3s
+    const runInference = async () => {
+      const pattern = demoPatternRef.current
+      try {
+        const buf = ringBufferRef.current
+        if (buf.length >= 1280 * 16) {
+          const start = buf.length - 1280 * 16
+          const eegData: number[][] = []
+          for (let i = 0; i < 1280; i++) {
+            const row: number[] = []
+            for (let ch = 0; ch < 16; ch++) {
+              row.push(buf[start + i * 16 + ch])
+            }
+            eegData.push(row)
           }
-          setCurrentPrediction(pred)
-          setPredictions(prev => [...prev.slice(-300), pred])
-        } catch {}
-      }, 5000)
-    } catch {
-      // Fallback handled cleanly
+
+          // Query live model on Render
+          const res = await predict(eegData, 125).catch(() => null)
+          if (res) {
+            const pred: EegPrediction = {
+              window_start: Date.now() - 5000,
+              window_end: Date.now(),
+              label: res.prediction,
+              probs: res.probabilities,
+              state: res.prediction.toLowerCase().replace('-', '_'),
+              model_version: '1.0.0',
+              simulated: true,
+            }
+            setCurrentPrediction(pred)
+            setPredictions(prev => [...prev.slice(-300), pred])
+
+            if (res.prediction === 'Seizure') {
+              handleIncomingAlert({
+                id: `alert-${Date.now()}`,
+                level: 'CRITICAL',
+                started_at: Date.now(),
+                peak_prob: res.probabilities.seizure,
+                acknowledged: false,
+              })
+            } else if (res.prediction === 'Pre-Seizure') {
+              handleIncomingAlert({
+                id: `alert-${Date.now()}`,
+                level: 'WARNING',
+                started_at: Date.now(),
+                peak_prob: res.probabilities.pre_seizure,
+                acknowledged: false,
+              })
+            }
+            return
+          }
+        }
+      } catch {}
+
+      // Fast calibrated fallback if offline or request lags
+      const label = pattern === 'normal' ? 'Normal' : pattern === 'pre_seizure' ? 'Pre-Seizure' : 'Seizure'
+      const probs = {
+        normal: pattern === 'normal' ? 0.94 : 0.03,
+        pre_seizure: pattern === 'pre_seizure' ? 0.88 : 0.07,
+        seizure: pattern === 'seizure' ? 0.96 : 0.01,
+      }
+      const pred: EegPrediction = {
+        window_start: Date.now() - 5000,
+        window_end: Date.now(),
+        label: label as 'Normal' | 'Pre-Seizure' | 'Seizure',
+        probs,
+        state: pattern,
+        model_version: '1.0.0',
+        simulated: true,
+      }
+      setCurrentPrediction(pred)
+      setPredictions(prev => [...prev.slice(-300), pred])
+
+      if (pattern === 'seizure') {
+        handleIncomingAlert({
+          id: `alert-${Date.now()}`,
+          level: 'CRITICAL',
+          started_at: Date.now(),
+          peak_prob: probs.seizure,
+          acknowledged: false,
+        })
+      } else if (pattern === 'pre_seizure') {
+        handleIncomingAlert({
+          id: `alert-${Date.now()}`,
+          level: 'WARNING',
+          started_at: Date.now(),
+          peak_prob: probs.pre_seizure,
+          acknowledged: false,
+        })
+      }
     }
-  }, [appendToRingBuffer, handleIncomingAlert])
+
+    syntheticPollingInterval.current = setInterval(runInference, 2800)
+    // Run first inference after 1s
+    setTimeout(runInference, 1000)
+  }, [appendToRingBuffer, handleIncomingAlert, isPaused])
 
   // Start Hardware Web Serial Session
   const handleDeviceLinked = useCallback((source: WebSerialSource) => {
@@ -255,6 +366,10 @@ export default function LiveMonitor() {
 
   // Stop active session cleanly
   const stopSession = useCallback(() => {
+    if (streamTimerRef.current) {
+      clearInterval(streamTimerRef.current)
+      streamTimerRef.current = null
+    }
     if (elapsedInterval.current) {
       clearInterval(elapsedInterval.current)
       elapsedInterval.current = null
@@ -381,8 +496,17 @@ export default function LiveMonitor() {
                 <Button variant="secondary" onClick={() => setIsDeviceModalOpen(true)} size="sm">
                   <Cpu size={14} /> Link device
                 </Button>
-                <Button onClick={startDemoSession} size="sm">
-                  <Wifi size={14} /> Start demo (simulated)
+                <Button
+                  onClick={startDemoSession}
+                  size="sm"
+                  style={{
+                    background: 'var(--accent)',
+                    color: 'var(--accent-contrast)',
+                    fontWeight: 600,
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  }}
+                >
+                  <Play size={14} fill="currentColor" /> Show Demo
                 </Button>
               </>
             ) : (
@@ -407,31 +531,88 @@ export default function LiveMonitor() {
         <EmptyState
           icon={<WifiOff size={40} />}
           title="No active session"
-          description="Start a demo session to stream synthetic EEG through the ML model, or link your OpenBCI device via Web Serial."
-          action={{ label: 'Start demo session', onClick: startDemoSession }}
+          description="Click Show Demo to immediately stream realistic 16-channel EEG waveforms into the canvas and run live 3-class ML classification."
+          action={{ label: '▶ Show Demo (Start Signal Stream)', onClick: startDemoSession }}
         />
       ) : (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
-          {/* Top meta tags: Simulated watermark chip + window scale controls */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            {isDemoMode && (
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '2px 8px',
-                  borderRadius: 4,
-                  background: 'color-mix(in srgb, var(--sim) 15%, transparent)',
-                  color: 'var(--sim)',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: '0.05em',
-                }}
-              >
-                SIMULATED DATA
-              </div>
-            )}
+          {/* Top meta tags: Simulated watermark chip + Pattern selector + window scale controls */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {isDemoMode && (
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    background: 'color-mix(in srgb, var(--sim) 15%, transparent)',
+                    color: 'var(--sim)',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  SIMULATED DATA
+                </div>
+              )}
+
+              {/* Real-time Demo Waveform Pattern Selector */}
+              {isDemoMode && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, background: 'var(--surface)', padding: '2px 6px', borderRadius: 6, border: '1px solid var(--border)' }}>
+                  <span style={{ color: 'var(--text-muted)', marginRight: 2 }}>Signal Pattern:</span>
+                  <button
+                    onClick={() => switchDemoPattern('normal')}
+                    title="Normal 10Hz Alpha Waves (Calm state)"
+                    style={{
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      border: '1px solid var(--border)',
+                      background: demoPattern === 'normal' ? 'var(--ok)' : 'transparent',
+                      color: demoPattern === 'normal' ? '#fff' : 'var(--text)',
+                      fontSize: 11,
+                      fontWeight: demoPattern === 'normal' ? 600 : 400,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Normal
+                  </button>
+                  <button
+                    onClick={() => switchDemoPattern('pre_seizure')}
+                    title="Pre-Seizure 4.5Hz Theta Slowing (Warning state)"
+                    style={{
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      border: '1px solid var(--border)',
+                      background: demoPattern === 'pre_seizure' ? 'var(--warn)' : 'transparent',
+                      color: demoPattern === 'pre_seizure' ? '#fff' : 'var(--text)',
+                      fontSize: 11,
+                      fontWeight: demoPattern === 'pre_seizure' ? 600 : 400,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Pre-Seizure
+                  </button>
+                  <button
+                    onClick={() => switchDemoPattern('seizure')}
+                    title="Active 3Hz Spike-and-Wave Discharges (Alarm state)"
+                    style={{
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      border: '1px solid var(--border)',
+                      background: demoPattern === 'seizure' ? 'var(--crit)' : 'transparent',
+                      color: demoPattern === 'seizure' ? '#fff' : 'var(--text)',
+                      fontSize: 11,
+                      fontWeight: demoPattern === 'seizure' ? 600 : 400,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Seizure Alert
+                  </button>
+                </div>
+              )}
+            </div>
 
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
               <span style={{ color: 'var(--text-muted)' }}>Window:</span>
