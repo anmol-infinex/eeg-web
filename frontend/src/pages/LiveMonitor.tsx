@@ -23,6 +23,7 @@ import {
   startDemo,
   getSyntheticWindow,
   getPipelineDiagnostics,
+  predict,
 } from '../lib/api'
 import type {
   ConnectionStatus,
