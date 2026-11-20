@@ -31,6 +31,7 @@ export default function Header({
   backendStatus = 'offline',
   theme = 'system',
   onToggleTheme,
+  sidebarOpen = true,
   currentUser = 'Admin',
   onLogout,
 }: HeaderProps) {
