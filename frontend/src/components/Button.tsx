@@ -21,8 +21,8 @@ export default function Button({
       {...props}
       disabled={disabled}
       className={clsx(
-        'inline-flex items-center gap-1.5 rounded-[6px] border font-medium transition-all duration-120',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]',
+        'inline-flex items-center gap-1.5 rounded-[4px] border font-medium transition-all duration-120 cursor-pointer',
+        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]',
         'disabled:opacity-40 disabled:cursor-not-allowed',
         VARIANTS[variant], SIZES[size], className
       )}

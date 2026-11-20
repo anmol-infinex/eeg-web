@@ -32,7 +32,7 @@ export default function Overview({ onBackendStatus }: Props) {
       <PageHeader title="Overview" subtitle="System status and quick actions" />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 16 }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>
             <Cpu size={16} strokeWidth={1.5} /> Backend status
           </div>
@@ -56,7 +56,7 @@ export default function Overview({ onBackendStatus }: Props) {
           )}
         </div>
 
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 16 }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>
             <Activity size={16} strokeWidth={1.5} /> Quick actions
           </div>
@@ -74,7 +74,7 @@ export default function Overview({ onBackendStatus }: Props) {
         </div>
       </div>
 
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 16, marginBottom: 16 }}>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: 16, marginBottom: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Supported devices</div>
         <KeyValueList items={[
           { label: 'OpenBCI Cyton + Daisy', value: '16 ch · 125 Hz · USB dongle (Web Serial)' },
@@ -83,7 +83,7 @@ export default function Overview({ onBackendStatus }: Props) {
         ]} />
       </div>
 
-      <div style={{ padding: 12, background: 'var(--surface-2)', borderRadius: 6, fontSize: 12, color: 'var(--text-muted)', borderLeft: '3px solid var(--border)' }}>
+      <div style={{ padding: 12, background: 'var(--surface-2)', borderRadius: 4, fontSize: 12, color: 'var(--text-muted)', borderLeft: '3px solid var(--border)' }}>
         Research prototype. Not a medical device. Data stays on your server and is not sent to any third party.
       </div>
     </div>

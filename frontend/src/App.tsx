@@ -120,7 +120,7 @@ export default function App() {
                 padding: '8px 12px', textDecoration: 'none',
                 color: isActive ? 'var(--accent)' : 'var(--text-muted)',
                 background: isActive ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
-                borderRadius: 6, margin: '1px 8px', fontSize: 13, fontWeight: isActive ? 500 : 400,
+                borderRadius: 4, margin: '1px 8px', fontSize: 13, fontWeight: isActive ? 500 : 400,
                 transition: 'all 120ms'
               })}
             >
@@ -144,7 +144,7 @@ export default function App() {
               padding: '8px 12px',
               background: 'none',
               border: 'none',
-              borderRadius: 6,
+              borderRadius: 4,
               color: 'var(--text-muted)',
               fontSize: 13,
               cursor: 'pointer',
