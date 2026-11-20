@@ -2,7 +2,7 @@ import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import { useState, useEffect, useCallback } from 'react'
 import {
   Activity, Monitor, Cpu, FolderOpen, Bell, Settings, BookOpen,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, FileText
 } from 'lucide-react'
 import Overview from './pages/Overview'
 import LiveMonitor from './pages/LiveMonitor'
@@ -11,6 +11,7 @@ import Recordings from './pages/Recordings'
 import AlertsPage from './pages/Alerts'
 import ModelCard from './pages/ModelCard'
 import SettingsPage from './pages/Settings'
+import EdfReader from './pages/EdfReader'
 import Header from './components/Header'
 
 type Theme = 'light' | 'dark' | 'system'
@@ -41,6 +42,7 @@ export default function App() {
   const navItems = [
     { to: '/', label: 'Overview', icon: Activity },
     { to: '/live', label: 'Live monitor', icon: Monitor },
+    { to: '/edf-reader', label: 'EDF File Reader', icon: FileText },
     { to: '/devices', label: 'Devices', icon: Cpu },
     { to: '/recordings', label: 'Recordings', icon: FolderOpen },
     { to: '/alerts', label: 'Alerts', icon: Bell },
@@ -117,6 +119,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Overview onBackendStatus={setBackendStatus} />} />
             <Route path="/live" element={<LiveMonitor />} />
+            <Route path="/edf-reader" element={<EdfReader />} />
             <Route path="/devices" element={<Devices />} />
             <Route path="/recordings" element={<Recordings />} />
             <Route path="/alerts" element={<AlertsPage />} />

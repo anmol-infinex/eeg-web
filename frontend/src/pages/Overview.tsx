@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Activity, Cpu, Monitor } from 'lucide-react'
+import { Activity, Cpu, Monitor, FileText, ExternalLink } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import KeyValueList from '../components/KeyValueList'
 import StatusChip from '../components/StatusChip'
@@ -63,6 +63,9 @@ export default function Overview({ onBackendStatus }: Props) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <Button onClick={() => navigate('/live')}>
               <Monitor size={14} /> Start demo session
+            </Button>
+            <Button variant="secondary" onClick={() => navigate('/edf-reader')}>
+              <FileText size={14} /> EDF File Reader (NeuroTrace)
             </Button>
             <Button variant="secondary" onClick={() => navigate('/devices')}>
               <Cpu size={14} /> Manage devices
