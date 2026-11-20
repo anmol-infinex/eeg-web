@@ -200,8 +200,20 @@ class DemoStartRequest(BaseModel):
     preset: Optional[str] = "preset_seizure_demo"
 
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    authenticated: bool
+    username: str
+    role: str = "Clinical Neurophysiologist"
+    token: str
+
+
 # =============================================================================
-# Health & Inference Endpoints
+# Health & Authentication Endpoints
 # =============================================================================
 
 @app.get("/health", tags=["System"])
@@ -218,6 +230,32 @@ def health_check():
         "model_name": "TUSZ_EEG_DEEP_CNN",
         "version": "1.0.0",
     }
+
+
+@app.post("/auth/login", response_model=LoginResponse, tags=["Auth"])
+def operator_login(request: LoginRequest):
+    """
+    Clinical Workstation Authentication Endpoint.
+    Uses timing-safe comparison to prevent timing side-channel attacks.
+    """
+    expected_user = os.getenv("ADMIN_USERNAME", "Admin")
+    expected_pass = os.getenv("ADMIN_PASSWORD", "Admin@123")
+
+    user_ok = secrets.compare_digest(request.username.strip(), expected_user)
+    pass_ok = secrets.compare_digest(request.password, expected_pass)
+
+    if not (user_ok and pass_ok):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Operator credentials. Access denied.",
+        )
+
+    return LoginResponse(
+        authenticated=True,
+        username=expected_user,
+        role="Clinical Neurophysiology Specialist",
+        token=secrets.token_hex(24),
+    )
 
 
 @app.post(

@@ -2,7 +2,7 @@ import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import { useState, useEffect, useCallback } from 'react'
 import {
   Activity, Monitor, Cpu, FolderOpen, Bell, Settings, BookOpen,
-  ChevronLeft, ChevronRight, FileText
+  ChevronLeft, ChevronRight, FileText, LogOut, ShieldCheck
 } from 'lucide-react'
 import Overview from './pages/Overview'
 import LiveMonitor from './pages/LiveMonitor'
@@ -12,6 +12,7 @@ import AlertsPage from './pages/Alerts'
 import ModelCard from './pages/ModelCard'
 import SettingsPage from './pages/Settings'
 import EdfReader from './pages/EdfReader'
+import Login from './pages/Login'
 import Header from './components/Header'
 
 type Theme = 'light' | 'dark' | 'system'
@@ -23,6 +24,12 @@ function applyTheme(t: Theme) {
 }
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return sessionStorage.getItem('sentry_authenticated') === 'true'
+  })
+  const [currentUser, setCurrentUser] = useState<string>(() => {
+    return sessionStorage.getItem('sentry_user') || 'Admin'
+  })
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [theme, setTheme] = useState<Theme>(() => {
     return (localStorage.getItem('theme') as Theme) ?? 'system'
@@ -38,6 +45,27 @@ export default function App() {
   const cycleTheme = useCallback(() => {
     setTheme(t => t === 'light' ? 'dark' : t === 'dark' ? 'system' : 'light')
   }, [])
+
+  const handleLoginSuccess = useCallback((user: string) => {
+    setCurrentUser(user)
+    setIsAuthenticated(true)
+  }, [])
+
+  const handleLogout = useCallback(() => {
+    sessionStorage.removeItem('sentry_authenticated')
+    sessionStorage.removeItem('sentry_user')
+    setIsAuthenticated(false)
+  }, [])
+
+  if (!isAuthenticated) {
+    return (
+      <Login
+        onLoginSuccess={handleLoginSuccess}
+        currentTheme={theme}
+        onToggleTheme={cycleTheme}
+      />
+    )
+  }
 
   const navItems = [
     { to: '/', label: 'Overview', icon: Activity },
@@ -101,6 +129,41 @@ export default function App() {
             </NavLink>
           ))}
         </nav>
+
+        {/* Sidebar Footer / Lock workstation action */}
+        <div style={{ padding: '8px', borderTop: '1px solid var(--border)' }}>
+          <button
+            onClick={handleLogout}
+            title="Lock Workstation"
+            aria-label="Lock Workstation"
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '8px 12px',
+              background: 'none',
+              border: 'none',
+              borderRadius: 6,
+              color: 'var(--text-muted)',
+              fontSize: 13,
+              cursor: 'pointer',
+              transition: 'all 120ms',
+              textAlign: 'left'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.color = 'var(--crit)'
+              e.currentTarget.style.background = 'color-mix(in srgb, var(--crit) 8%, transparent)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.color = 'var(--text-muted)'
+              e.currentTarget.style.background = 'none'
+            }}
+          >
+            <LogOut size={16} strokeWidth={1.5} />
+            {sidebarOpen && <span>Lock Workstation</span>}
+          </button>
+        </div>
       </aside>
 
       {/* Main area */}
@@ -112,6 +175,8 @@ export default function App() {
           theme={theme}
           onToggleTheme={cycleTheme}
           sidebarOpen={sidebarOpen}
+          currentUser={currentUser}
+          onLogout={handleLogout}
         />
 
         {/* Content */}

@@ -3,7 +3,7 @@
  * backend health status chip, and theme toggle.
  */
 
-import { Sun, Moon, Laptop } from 'lucide-react'
+import { Sun, Moon, Laptop, User, LogOut } from 'lucide-react'
 import StatusChip from './StatusChip'
 import type { ConnectionStatus } from '../lib/types'
 
@@ -14,6 +14,8 @@ interface HeaderProps {
   theme?: 'light' | 'dark' | 'system'
   onToggleTheme?: () => void
   sidebarOpen?: boolean
+  currentUser?: string
+  onLogout?: () => void
 }
 
 const CONN_COLORS: Record<ConnectionStatus, { bg: string; color: string; border: string }> = {
@@ -29,7 +31,8 @@ export default function Header({
   backendStatus = 'offline',
   theme = 'system',
   onToggleTheme,
-  sidebarOpen = true,
+  currentUser = 'Admin',
+  onLogout,
 }: HeaderProps) {
   const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Laptop
   const connStyle = connectionStatus ? CONN_COLORS[connectionStatus] : null
@@ -100,6 +103,58 @@ export default function Header({
           <ThemeIcon size={14} />
           {sidebarOpen && <span style={{ textTransform: 'capitalize' }}>{theme}</span>}
         </button>
+      )}
+
+      {currentUser && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            paddingLeft: 8,
+            borderLeft: '1px solid var(--border)'
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 12,
+              color: 'var(--text)',
+              padding: '2px 8px',
+              borderRadius: 4,
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)'
+            }}
+          >
+            <User size={13} color="var(--accent)" />
+            <span style={{ fontWeight: 500 }}>{currentUser}</span>
+          </div>
+
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              title="Lock Workstation / Sign Out"
+              aria-label="Lock Workstation / Sign Out"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                background: 'none',
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                padding: '4px 8px',
+                cursor: 'pointer',
+                color: 'var(--text-muted)',
+                fontSize: 12
+              }}
+            >
+              <LogOut size={13} />
+              <span>Lock</span>
+            </button>
+          )}
+        </div>
       )}
     </header>
   )
